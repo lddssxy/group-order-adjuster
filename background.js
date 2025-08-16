@@ -40,6 +40,47 @@ const DEFAULT_SETTINGS = {
   tikkieLink: '' // Will be stored encrypted
 };
 
+/**
+ * Extract Tikkie URL from text that may contain additional content
+ * Supports both direct URLs and full message text
+ */
+function extractTikkieUrl(text) {
+  if (!text || typeof text !== 'string') {
+    return null;
+  }
+
+  // Tikkie URL pattern - matches https://tikkie.me/pay/... URLs
+  const tikkieUrlPattern = /https:\/\/tikkie\.me\/pay\/[a-zA-Z0-9]+/g;
+
+  // First, try to match the exact pattern
+  const matches = text.match(tikkieUrlPattern);
+
+  if (matches && matches.length > 0) {
+    // Return the first valid Tikkie URL found
+    return matches[0];
+  }
+
+  // If no pattern match, check if the entire text is a direct Tikkie URL
+  try {
+    const url = new URL(text.trim());
+    if (url.hostname === 'tikkie.me' && url.pathname.startsWith('/pay/')) {
+      return text.trim();
+    }
+  } catch (e) {
+    // Not a valid URL, continue with other checks
+  }
+
+  // Check for common variations (www.tikkie.me, app.tikkie.me)
+  const extendedPattern = /https:\/\/(www\.|app\.)?tikkie\.me\/pay\/[a-zA-Z0-9]+/g;
+  const extendedMatches = text.match(extendedPattern);
+
+  if (extendedMatches && extendedMatches.length > 0) {
+    return extendedMatches[0];
+  }
+
+  return null;
+}
+
 // Initialize extension
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('Group Order Extra Calculator installed');
@@ -80,7 +121,18 @@ async function handleGetSettings(sendResponse) {
     securityManager.validateExtensionContext();
 
     const result = await chrome.storage.sync.get(DEFAULT_SETTINGS);
-    const settings = { ...DEFAULT_SETTINGS, ...result };
+    // Properly merge settings, ensuring zero values are preserved
+    const settings = { ...DEFAULT_SETTINGS };
+
+    // Only use defaults for undefined/null values, not for 0 or false
+    Object.keys(result).forEach(key => {
+      if (result[key] !== undefined && result[key] !== null) {
+        settings[key] = result[key];
+      }
+    });
+
+    console.log('Settings retrieved from storage:', result);
+    console.log('Final merged settings:', settings);
 
     // Decrypt Tikkie link if present and encrypted
     if (settings.tikkieLink && settings.tikkieLink.startsWith('encrypted:')) {
@@ -143,33 +195,43 @@ async function handleUpdateSettings(newSettings, sendResponse) {
 
     // Validate and process Tikkie link if present
     if (settingsToStore.tikkieLink !== undefined) {
-      console.log('Processing Tikkie link:', settingsToStore.tikkieLink);
+      console.log('Processing Tikkie link input:', settingsToStore.tikkieLink);
 
       try {
-        // Simple validation - just check if it's empty or a reasonable URL
-        const tikkieLink = settingsToStore.tikkieLink.trim();
+        const rawInput = settingsToStore.tikkieLink.trim();
 
-        if (tikkieLink === '') {
+        if (rawInput === '') {
           // Empty link is valid
           settingsToStore.tikkieLink = '';
           console.log('Empty Tikkie link stored');
         } else {
-          // Basic URL validation
-          try {
-            new URL(tikkieLink); // This will throw if invalid URL
-            settingsToStore.tikkieLink = tikkieLink;
-            console.log('Tikkie link stored (basic validation passed)');
-          } catch (urlError) {
-            console.warn('Invalid URL format for Tikkie link:', urlError.message);
-            // For debugging, allow invalid URLs but log the issue
-            settingsToStore.tikkieLink = tikkieLink;
-            console.log('Stored potentially invalid Tikkie link for debugging');
+          // Extract Tikkie URL from text (supports both direct URLs and message text)
+          const extractedUrl = extractTikkieUrl(rawInput);
+          console.log('Extracted Tikkie URL:', extractedUrl);
+
+          if (extractedUrl) {
+            // Validate the extracted URL
+            try {
+              new URL(extractedUrl); // This will throw if invalid URL
+              settingsToStore.tikkieLink = extractedUrl;
+              console.log('Valid Tikkie URL stored:', extractedUrl);
+            } catch (urlError) {
+              console.warn('Extracted URL is invalid:', urlError.message);
+              settingsToStore.tikkieLink = '';
+              console.log('Cleared invalid Tikkie URL');
+            }
+          } else {
+            // No valid Tikkie URL found in the input
+            console.warn('No valid Tikkie URL found in input text');
+            settingsToStore.tikkieLink = '';
+            console.log('Cleared Tikkie link - no valid URL found');
           }
         }
 
         securityManager.logSecurityEvent('tikkie_url_processed', {
-          hasLink: tikkieLink.length > 0,
-          linkLength: tikkieLink.length
+          hasLink: settingsToStore.tikkieLink.length > 0,
+          linkLength: settingsToStore.tikkieLink.length,
+          wasExtracted: rawInput !== settingsToStore.tikkieLink
         });
 
       } catch (validationError) {

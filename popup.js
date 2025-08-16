@@ -110,8 +110,19 @@ async function saveSettings() {
     }
 
     const dailyBudgetInput = document.getElementById('daily-budget').value;
-    const dailyBudget = dailyBudgetInput === '' ? 14 : parseFloat(dailyBudgetInput);
-    console.log('1.1. Daily budget input:', dailyBudgetInput, 'parsed:', dailyBudget);
+    let dailyBudget;
+
+    if (dailyBudgetInput === '' || dailyBudgetInput === null || dailyBudgetInput === undefined) {
+      dailyBudget = 14; // Use default only for truly empty values
+    } else {
+      dailyBudget = parseFloat(dailyBudgetInput);
+      // Validate that it's a valid number
+      if (isNaN(dailyBudget) || dailyBudget < 0) {
+        dailyBudget = 14; // Use default for invalid values
+      }
+    }
+
+    console.log('1.1. Daily budget input:', dailyBudgetInput, 'parsed:', dailyBudget, 'isZero:', dailyBudget === 0);
     const settings = {
       dailyBudget: dailyBudget,
       tikkieLink: tikkieValue
