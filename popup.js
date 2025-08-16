@@ -71,12 +71,9 @@ async function loadSettings() {
 
 // Save settings to storage with security validation
 async function saveSettings() {
-  console.log('=== SAVE SETTINGS DEBUG ===');
-
   try {
     const tikkieInput = document.getElementById('tikkie-link');
     const tikkieValue = tikkieInput.value.trim();
-    console.log('1. Input values - Tikkie:', tikkieValue);
 
     // Client-side validation of Tikkie URL before sending
     if (tikkieValue) {
@@ -122,51 +119,21 @@ async function saveSettings() {
       }
     }
 
-    console.log('1.1. Daily budget input:', dailyBudgetInput, 'parsed:', dailyBudget, 'isZero:', dailyBudget === 0);
     const settings = {
       dailyBudget: dailyBudget,
       tikkieLink: tikkieValue
     };
-    console.log('2. Settings to save:', settings);
 
-    // Test direct storage first
-    try {
-      await chrome.storage.sync.set(settings);
-      console.log('3. Direct storage successful');
-    } catch (directError) {
-      console.error('3. Direct storage failed:', directError);
-    }
-
-    // Test message-based save
-    console.log('4. Sending message to background...');
     const response = await sendMessage({ type: 'UPDATE_SETTINGS', settings });
-    console.log('5. Background response:', response);
 
     if (response && response.success) {
       updateStatus('Settings saved successfully', 'success');
-      console.log('6. Save completed successfully');
       setTimeout(() => updateStatus('Ready', 'success'), 2000);
     } else {
-      // If background save fails, try saving just the daily budget
-      console.log('6. Background save failed, trying daily budget only...');
-      try {
-        const budgetOnlySettings = { dailyBudget: dailyBudget };
-        await chrome.storage.sync.set(budgetOnlySettings);
-        console.log('7. Daily budget saved successfully (fallback)');
-        updateStatus('Daily budget saved (Tikkie link issue)', 'warning');
-        setTimeout(() => updateStatus('Ready', 'success'), 3000);
-      } catch (fallbackError) {
-        console.error('7. Fallback save also failed:', fallbackError);
-        throw new Error(response?.error || 'Unknown error from background script');
-      }
+      throw new Error(response?.error || 'Unknown error from background script');
     }
   } catch (error) {
-    console.error('=== SAVE FAILED ===', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      name: error.name
-    });
+    console.error('Error saving settings:', error);
 
     // Show specific error message if it's a security-related error
     if (error.message.includes('Invalid Tikkie URL') ||

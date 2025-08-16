@@ -7,29 +7,15 @@
 let securityManager;
 try {
   importScripts('security.js');
-  console.log('Security manager loaded successfully');
 } catch (error) {
   console.error('Security manager failed to load:', error);
   // Create fallback security manager
   securityManager = {
-    validateExtensionContext: () => {
-      console.log('Using fallback security manager - validateExtensionContext');
-    },
-    checkRateLimit: () => {
-      console.log('Using fallback security manager - checkRateLimit');
-      return true;
-    },
-    encrypt: async (data) => {
-      console.log('Using fallback security manager - encrypt (no encryption)');
-      return data;
-    },
-    decrypt: async (data) => {
-      console.log('Using fallback security manager - decrypt (no decryption)');
-      return data;
-    },
-    logSecurityEvent: (event, details) => {
-      console.log('Security event (fallback):', event, details);
-    }
+    validateExtensionContext: () => {},
+    checkRateLimit: () => true,
+    encrypt: async (data) => data,
+    decrypt: async (data) => data,
+    logSecurityEvent: () => {}
   };
 }
 
@@ -83,8 +69,6 @@ function extractTikkieUrl(text) {
 
 // Initialize extension
 chrome.runtime.onInstalled.addListener(async () => {
-  console.log('Group Order Extra Calculator installed');
-  
   // Set default settings if not already set
   const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
   await chrome.storage.sync.set(settings);
@@ -131,8 +115,7 @@ async function handleGetSettings(sendResponse) {
       }
     });
 
-    console.log('Settings retrieved from storage:', result);
-    console.log('Final merged settings:', settings);
+
 
     // Decrypt Tikkie link if present and encrypted
     if (settings.tikkieLink && settings.tikkieLink.startsWith('encrypted:')) {
@@ -172,8 +155,6 @@ async function handleGetSettings(sendResponse) {
 
 // Update settings with secure Tikkie link handling
 async function handleUpdateSettings(newSettings, sendResponse) {
-  console.log('handleUpdateSettings called with:', newSettings);
-
   try {
     // Validate extension context for security
     try {
@@ -191,40 +172,32 @@ async function handleUpdateSettings(newSettings, sendResponse) {
 
     // Create a copy of settings for processing
     const settingsToStore = { ...newSettings };
-    console.log('Settings to store:', settingsToStore);
 
     // Validate and process Tikkie link if present
     if (settingsToStore.tikkieLink !== undefined) {
-      console.log('Processing Tikkie link input:', settingsToStore.tikkieLink);
-
       try {
         const rawInput = settingsToStore.tikkieLink.trim();
 
         if (rawInput === '') {
           // Empty link is valid
           settingsToStore.tikkieLink = '';
-          console.log('Empty Tikkie link stored');
         } else {
           // Extract Tikkie URL from text (supports both direct URLs and message text)
           const extractedUrl = extractTikkieUrl(rawInput);
-          console.log('Extracted Tikkie URL:', extractedUrl);
 
           if (extractedUrl) {
             // Validate the extracted URL
             try {
               new URL(extractedUrl); // This will throw if invalid URL
               settingsToStore.tikkieLink = extractedUrl;
-              console.log('Valid Tikkie URL stored:', extractedUrl);
             } catch (urlError) {
               console.warn('Extracted URL is invalid:', urlError.message);
               settingsToStore.tikkieLink = '';
-              console.log('Cleared invalid Tikkie URL');
             }
           } else {
             // No valid Tikkie URL found in the input
             console.warn('No valid Tikkie URL found in input text');
             settingsToStore.tikkieLink = '';
-            console.log('Cleared Tikkie link - no valid URL found');
           }
         }
 
@@ -238,15 +211,12 @@ async function handleUpdateSettings(newSettings, sendResponse) {
         console.error('Tikkie processing failed:', validationError);
         // If all validation fails, store empty string to prevent blocking other settings
         settingsToStore.tikkieLink = '';
-        console.log('Cleared Tikkie link due to processing error');
       }
     }
 
     // Store settings
-    console.log('Attempting to store settings:', settingsToStore);
     try {
       await chrome.storage.sync.set(settingsToStore);
-      console.log('Settings stored successfully');
       sendResponse({ success: true });
     } catch (storageError) {
       console.error('Storage operation failed:', storageError);

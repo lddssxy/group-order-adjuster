@@ -35,9 +35,7 @@
     try {
       const response = await sendMessage({ type: 'GET_SETTINGS' });
       if (response && response.success) {
-        console.log('Content script received settings:', response.settings);
         currentSettings = { ...currentSettings, ...response.settings };
-        console.log('Content script merged settings:', currentSettings);
       }
     } catch (error) {
       console.warn('Failed to load settings, using defaults:', error);
@@ -53,9 +51,7 @@
           return true; // Keep message channel open
 
         case 'SETTINGS_UPDATED':
-          console.log('Content script received settings update:', message.settings);
           currentSettings = { ...currentSettings, ...message.settings };
-          console.log('Content script updated settings:', currentSettings);
           break;
 
         default:
@@ -115,10 +111,7 @@
       }
 
       // Parse order data from page
-      console.log('=== Starting Order Data Parsing ===');
       const orderData = parseOrderData();
-      console.log('=== Order Data Parsing Complete ===');
-      console.log('Final parsed data:', orderData);
 
       if (!orderData.people || Object.keys(orderData.people).length === 0) {
         console.error('No participants found in order data:', orderData);
@@ -687,7 +680,6 @@
 
     // Strategy 2: Fallback to text-based parsing if structured parsing found nothing
     if (delivery === 0 && service === 0 && discount === 0) {
-      console.log('No fees found in structured elements, trying text parsing...');
       const textFees = parseFeesFromText(document.body.innerText.split('\n'));
       delivery = textFees.delivery;
       service = textFees.service;
@@ -754,21 +746,13 @@
     const { people, delivery, service, discount } = orderData;
     // Use explicit check to handle zero values properly
     const budget = (settings.dailyBudget !== undefined && settings.dailyBudget !== null) ? settings.dailyBudget : 14;
-    console.log('Budget calculation - settings.dailyBudget:', settings.dailyBudget, 'final budget:', budget);
 
     const participantNames = Object.keys(people);
     const orderSubtotal = Object.values(people).reduce((a, b) => a + b, 0);
     const grandTotal = orderSubtotal + delivery + service + discount;
     const totalCompanyBudget = budget * participantNames.length;
 
-    console.log('=== Budget Sharing Calculation ===');
-    console.log(`Budget per person: €${budget}`);
-    console.log(`Order subtotal: €${orderSubtotal.toFixed(2)}`);
-    console.log(`Delivery: €${delivery.toFixed(2)}`);
-    console.log(`Service: €${service.toFixed(2)}`);
-    console.log(`Discount: €${discount.toFixed(2)}`);
-    console.log(`Grand total: €${grandTotal.toFixed(2)}`);
-    console.log(`Total company budget: €${totalCompanyBudget.toFixed(2)}`);
+
 
     // Identify order creator
     let orderCreator = null;
@@ -1514,19 +1498,6 @@
   // Initialize the content script
   initialize();
 
-  // Expose debug function to global scope for console testing
-  window.debugGroupOrderSplitter = function() {
-    console.log('=== DEBUG: Manual cost splitting trigger ===');
-    return calculateAndDisplay(true).catch(error => {
-      console.error('Debug calculation failed:', error);
-      return { error: error.message };
-    });
-  };
 
-  // Expose parsing functions for debugging
-  window.debugParseOrderData = function() {
-    console.log('=== DEBUG: Manual order data parsing ===');
-    return parseOrderData();
-  };
 
 })();
