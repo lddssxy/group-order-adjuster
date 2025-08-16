@@ -71,9 +71,12 @@ async function loadSettings() {
 
 // Save settings to storage with security validation
 async function saveSettings() {
+  console.log('=== SAVE SETTINGS DEBUG ===');
+
   try {
     const tikkieInput = document.getElementById('tikkie-link');
     const tikkieValue = tikkieInput.value.trim();
+    console.log('1. Input values - Tikkie:', tikkieValue);
 
     // Client-side validation of Tikkie URL before sending
     if (tikkieValue) {
@@ -106,20 +109,40 @@ async function saveSettings() {
       }
     }
 
+    const dailyBudget = parseFloat(document.getElementById('daily-budget').value) || 14;
     const settings = {
-      dailyBudget: parseFloat(document.getElementById('daily-budget').value) || 14,
+      dailyBudget: dailyBudget,
       tikkieLink: tikkieValue
     };
+    console.log('2. Settings to save:', settings);
 
+    // Test direct storage first
+    try {
+      await chrome.storage.sync.set(settings);
+      console.log('3. Direct storage successful');
+    } catch (directError) {
+      console.error('3. Direct storage failed:', directError);
+    }
+
+    // Test message-based save
+    console.log('4. Sending message to background...');
     const response = await sendMessage({ type: 'UPDATE_SETTINGS', settings });
-    if (response.success) {
+    console.log('5. Background response:', response);
+
+    if (response && response.success) {
       updateStatus('Settings saved successfully', 'success');
+      console.log('6. Save completed successfully');
       setTimeout(() => updateStatus('Ready', 'success'), 2000);
     } else {
-      throw new Error(response.error);
+      throw new Error(response?.error || 'Unknown error from background script');
     }
   } catch (error) {
-    console.error('Error saving settings:', error);
+    console.error('=== SAVE FAILED ===', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
 
     // Show specific error message if it's a security-related error
     if (error.message.includes('Invalid Tikkie URL') ||

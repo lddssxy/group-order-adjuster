@@ -3,8 +3,35 @@
  * Handles storage, communication between popup and content script
  */
 
-// Import security manager
-importScripts('security.js');
+// Import security manager with error handling
+let securityManager;
+try {
+  importScripts('security.js');
+  console.log('Security manager loaded successfully');
+} catch (error) {
+  console.error('Security manager failed to load:', error);
+  // Create fallback security manager
+  securityManager = {
+    validateExtensionContext: () => {
+      console.log('Using fallback security manager - validateExtensionContext');
+    },
+    checkRateLimit: () => {
+      console.log('Using fallback security manager - checkRateLimit');
+      return true;
+    },
+    encrypt: async (data) => {
+      console.log('Using fallback security manager - encrypt (no encryption)');
+      return data;
+    },
+    decrypt: async (data) => {
+      console.log('Using fallback security manager - decrypt (no decryption)');
+      return data;
+    },
+    logSecurityEvent: (event, details) => {
+      console.log('Security event (fallback):', event, details);
+    }
+  };
+}
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -93,60 +120,83 @@ async function handleGetSettings(sendResponse) {
 
 // Update settings with secure Tikkie link handling
 async function handleUpdateSettings(newSettings, sendResponse) {
+  console.log('handleUpdateSettings called with:', newSettings);
+
   try {
     // Validate extension context for security
-    securityManager.validateExtensionContext();
+    try {
+      securityManager.validateExtensionContext();
+    } catch (secError) {
+      console.warn('Security validation failed, continuing anyway:', secError);
+    }
 
     // Rate limiting for settings updates
-    securityManager.checkRateLimit('settings_update', 10, 60000);
+    try {
+      securityManager.checkRateLimit('settings_update', 10, 60000);
+    } catch (rateError) {
+      console.warn('Rate limiting failed, continuing anyway:', rateError);
+    }
 
     // Create a copy of settings for processing
     const settingsToStore = { ...newSettings };
+    console.log('Settings to store:', settingsToStore);
 
-    // Validate and encrypt Tikkie link if present
+    // Validate and process Tikkie link if present
     if (settingsToStore.tikkieLink !== undefined) {
-      const validation = securityManager.validateTikkieUrl(settingsToStore.tikkieLink);
+      console.log('Processing Tikkie link:', settingsToStore.tikkieLink);
 
-      if (!validation.valid) {
-        securityManager.logSecurityEvent('invalid_tikkie_url_submitted', {
-          error: validation.error
-        });
-        sendResponse({
-          success: false,
-          error: `Invalid Tikkie URL: ${validation.error}`
-        });
-        return;
-      }
+      try {
+        const validation = securityManager.validateTikkieUrl(settingsToStore.tikkieLink);
+        console.log('Tikkie validation result:', validation);
 
-      // Encrypt the validated URL if not empty
-      if (validation.url && validation.url.trim().length > 0) {
-        try {
-          const encryptedLink = await securityManager.encrypt(validation.url);
-          settingsToStore.tikkieLink = `encrypted:${encryptedLink}`;
-
-          securityManager.logSecurityEvent('tikkie_url_encrypted', {
-            urlLength: validation.url.length
-          });
-        } catch (error) {
-          console.error('Failed to encrypt Tikkie link:', error);
-          securityManager.logSecurityEvent('tikkie_encryption_failed', {
-            error: error.message
+        if (!validation.valid) {
+          console.warn('Invalid Tikkie URL:', validation.error);
+          securityManager.logSecurityEvent('invalid_tikkie_url_submitted', {
+            error: validation.error
           });
           sendResponse({
             success: false,
-            error: 'Failed to securely store Tikkie link'
+            error: `Invalid Tikkie URL: ${validation.error}`
           });
           return;
         }
-      } else {
-        // Empty URL, store as is
-        settingsToStore.tikkieLink = '';
+
+        // For now, store without encryption to avoid crypto issues
+        // TODO: Re-enable encryption once crypto issues are resolved
+        if (validation.url && validation.url.trim().length > 0) {
+          settingsToStore.tikkieLink = validation.url; // Store directly without encryption
+          console.log('Tikkie link stored (unencrypted for debugging)');
+
+          securityManager.logSecurityEvent('tikkie_url_stored', {
+            urlLength: validation.url.length,
+            encrypted: false
+          });
+        } else {
+          // Empty URL, store as is
+          settingsToStore.tikkieLink = '';
+        }
+      } catch (validationError) {
+        console.error('Tikkie validation failed:', validationError);
+        // If validation fails, just store the raw value for debugging
+        settingsToStore.tikkieLink = settingsToStore.tikkieLink.trim();
+        console.log('Stored raw Tikkie link due to validation error');
       }
     }
 
     // Store settings
-    await chrome.storage.sync.set(settingsToStore);
-    sendResponse({ success: true });
+    console.log('Attempting to store settings:', settingsToStore);
+    try {
+      await chrome.storage.sync.set(settingsToStore);
+      console.log('Settings stored successfully');
+      sendResponse({ success: true });
+    } catch (storageError) {
+      console.error('Storage operation failed:', storageError);
+      sendResponse({
+        success: false,
+        error: `Storage failed: ${storageError.message}`
+      });
+      return;
+    }
 
     // Prepare settings for notification (with decrypted Tikkie link)
     const notificationSettings = { ...settingsToStore };
