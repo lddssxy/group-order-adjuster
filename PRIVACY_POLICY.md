@@ -11,7 +11,6 @@ Group Order Splitter ("the Extension") is committed to protecting your privacy. 
 ### User Settings
 - **Daily Budget**: Your configured daily budget limit
 - **Tikkie Payment Link**: Your personal Tikkie payment link (if provided)
-- **Preferences**: Auto-calculate settings and display preferences
 
 ### Order Data (Temporary Processing Only)
 - **Participant Names**: Names from Thuisbezorgd order pages
