@@ -109,7 +109,9 @@ async function saveSettings() {
       }
     }
 
-    const dailyBudget = parseFloat(document.getElementById('daily-budget').value) || 14;
+    const dailyBudgetInput = document.getElementById('daily-budget').value;
+    const dailyBudget = dailyBudgetInput === '' ? 14 : parseFloat(dailyBudgetInput);
+    console.log('1.1. Daily budget input:', dailyBudgetInput, 'parsed:', dailyBudget);
     const settings = {
       dailyBudget: dailyBudget,
       tikkieLink: tikkieValue
@@ -134,7 +136,18 @@ async function saveSettings() {
       console.log('6. Save completed successfully');
       setTimeout(() => updateStatus('Ready', 'success'), 2000);
     } else {
-      throw new Error(response?.error || 'Unknown error from background script');
+      // If background save fails, try saving just the daily budget
+      console.log('6. Background save failed, trying daily budget only...');
+      try {
+        const budgetOnlySettings = { dailyBudget: dailyBudget };
+        await chrome.storage.sync.set(budgetOnlySettings);
+        console.log('7. Daily budget saved successfully (fallback)');
+        updateStatus('Daily budget saved (Tikkie link issue)', 'warning');
+        setTimeout(() => updateStatus('Ready', 'success'), 3000);
+      } catch (fallbackError) {
+        console.error('7. Fallback save also failed:', fallbackError);
+        throw new Error(response?.error || 'Unknown error from background script');
+      }
     }
   } catch (error) {
     console.error('=== SAVE FAILED ===', error);
