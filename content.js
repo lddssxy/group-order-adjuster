@@ -35,7 +35,9 @@
     try {
       const response = await sendMessage({ type: 'GET_SETTINGS' });
       if (response && response.success) {
+        console.log('Content script received settings:', response.settings);
         currentSettings = { ...currentSettings, ...response.settings };
+        console.log('Content script merged settings:', currentSettings);
       }
     } catch (error) {
       console.warn('Failed to load settings, using defaults:', error);
@@ -51,7 +53,9 @@
           return true; // Keep message channel open
 
         case 'SETTINGS_UPDATED':
+          console.log('Content script received settings update:', message.settings);
           currentSettings = { ...currentSettings, ...message.settings };
+          console.log('Content script updated settings:', currentSettings);
           break;
 
         default:
@@ -128,7 +132,8 @@
       calculationResults = results;
 
       // Display results on page
-      displayResults(results.results, results.breakdown, fromPopup, results.withinBudget, results.orderCreator, currentSettings.dailyBudget || 14);
+      const displayBudget = (currentSettings.dailyBudget !== undefined && currentSettings.dailyBudget !== null) ? currentSettings.dailyBudget : 14;
+      displayResults(results.results, results.breakdown, fromPopup, results.withinBudget, results.orderCreator, displayBudget);
 
       return results;
 
@@ -747,7 +752,9 @@
    */
   function calculateDistribution(orderData, settings) {
     const { people, delivery, service, discount } = orderData;
-    const budget = settings.dailyBudget || 14;
+    // Use explicit check to handle zero values properly
+    const budget = (settings.dailyBudget !== undefined && settings.dailyBudget !== null) ? settings.dailyBudget : 14;
+    console.log('Budget calculation - settings.dailyBudget:', settings.dailyBudget, 'final budget:', budget);
 
     const participantNames = Object.keys(people);
     const orderSubtotal = Object.values(people).reduce((a, b) => a + b, 0);
@@ -880,7 +887,7 @@
    */
   function calculateAlternativeDistribution(orderData, settings) {
     const { people, delivery, service, discount } = orderData;
-    const budget = settings.dailyBudget || 14;
+    const budget = (settings.dailyBudget !== undefined && settings.dailyBudget !== null) ? settings.dailyBudget : 14;
     const participantNames = Object.keys(people);
     const orderSubtotal = Object.values(people).reduce((a, b) => a + b, 0);
     const grandTotal = orderSubtotal + delivery + service + discount;
@@ -1193,7 +1200,8 @@
     summary.style.textAlign = 'center';
     summary.style.fontSize = '12px';
     summary.style.color = '#666';
-    summary.textContent = `Budget: €${currentSettings.dailyBudget}/person • ${breakdown?.participantCount || 0} people`;
+    const summaryBudget = (currentSettings.dailyBudget !== undefined && currentSettings.dailyBudget !== null) ? currentSettings.dailyBudget : 14;
+    summary.textContent = `Budget: €${summaryBudget}/person • ${breakdown?.participantCount || 0} people`;
     modalContent.appendChild(summary);
 
     // Recalculate button
